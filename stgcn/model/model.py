@@ -28,11 +28,8 @@ class TemporalBlock(nn.Module):
         '''
         X = X.permute(0, 3, 1, 2) #(batch_size, node_features, num_timesteps, num_nodes)
         temp = self.conv(X)
-        print('Temp shape', temp.shape)
         P = temp[:, :self.out_channels, :, :]
-        print('P shape', P.shape)
         Q = temp[:, self.out_channels:, :, :]
-        print('Q shape', Q.shape)
         out = P*nn.Sigmoid()(Q)
         out = out.permute(0, 2, 3, 1)
         return out
