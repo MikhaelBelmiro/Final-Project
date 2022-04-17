@@ -11,12 +11,12 @@ warnings.filterwarnings('ignore')
 import numpy as np
 import pandas as pd
 
-from dotenv import load_dotenv
 from tqdm import tqdm
+from dotenv import load_dotenv
 from torch.utils.data import DataLoader
+from sklearn.preprocessing import StandardScaler
 from stgcn.model import STGCN
-from stgcn.utils import normalize_matrix, process_adj_mat, TimeSpaceDataset
-from pytorch_forecasting.metrics import MAE, MAPE
+from stgcn.utils import normalize_matrix, process_adj_mat, TimeSpaceDataset, MSE, MAE, MAPE
 
 def train(config_path):
     with open(config_path, 'r') as config_json:
@@ -34,11 +34,9 @@ def train(config_path):
     train_time_space_matrix = time_space_matrix[:-data_config['val_timesteps_split'], :]
     val_time_space_matrix = time_space_matrix[-data_config['val_timesteps_split']:, :]
 
-    z_score_mean = train_time_space_matrix.mean()
-    z_score_sigma = np.sqrt(train_time_space_matrix.var())
-
-    train_time_space_matrix = (train_time_space_matrix-z_score_mean)/z_score_sigma
-    val_time_space_matrix = (val_time_space_matrix-z_score_mean)/z_score_sigma
+    scaler = StandardScaler()
+    train_time_space_matrix = scaler.fit_transform(train_time_space_matrix)
+    val_time_space_matrix = scaler.fit_transform(val_time_space_matrix)
 
     device = torch.device('cuda:0') if torch.cuda.is_available() else 'cpu'
 
@@ -52,7 +50,6 @@ def train(config_path):
     optimizer = torch.optim.Adam(model.parameters(), **optimizer_config)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, scheduler_config['gamma'])
     loss_criterion = torch.nn.MSELoss()
-    mae = torch.nn.L1Loss()
 
     train_dataset = TimeSpaceDataset(
         time_space_matrix=train_time_space_matrix, 
@@ -69,16 +66,20 @@ def train(config_path):
         train_dataset, 
         batch_size=training_config['batch_size'], 
         pin_memory=True, 
-        num_workers=training_config['num_workers']
+        num_workers=training_config['num_workers'],
+        shuffle=True
         )
     val_dataloader = DataLoader(
         val_dataset, 
         batch_size=training_config['batch_size'], 
         pin_memory=True, 
-        num_workers=training_config['num_workers']
+        num_workers=training_config['num_workers'],
+        shuffle=True
         )
 
     out_dir = training_config['out_dir']
+    os.makedirs(out_dir, exist_ok=True)
+
     training_stats = {
         'epoch': [],
         'avg_train_mse_loss': [],
@@ -86,10 +87,13 @@ def train(config_path):
         'avg_train_mape_loss': [],
         'avg_val_mse_loss': [],
         'avg_val_mae_loss': [],
-        'avg_val_mape_loss': []
+        'avg_val_mape_loss': [],
+        'early_stopping_patience': []
     }
-
     with tqdm(total=training_config['num_epochs']) as pbar:
+        early_stopping_patience = training_config['early_stopping_patience']
+        early_stopping_delta = training_config['early_stopping_delta']
+
         for epoch in range(training_config['num_epochs']):
             model.train()
             total_train_mse_loss = 0
@@ -98,24 +102,23 @@ def train(config_path):
             for batch in train_dataloader:
                 optimizer.zero_grad()
                 features, target = batch
-                features = (features-z_score_mean)/z_score_sigma
 
                 features = torch.unsqueeze(features, 3).to(device, dtype=torch.float)
                 target = target.to(device, dtype=torch.float)
                 
                 predict = model(features)
-                train_mse_loss = loss_criterion(predict, target)
+                loss = loss_criterion(predict, target)
 
                 with torch.no_grad():
-                    total_train_mse_loss += train_mse_loss.cpu().item()
-                    total_train_mae_loss += torch.mean(MAE().loss(predict.squeeze().unsqueeze(-1), target.squeeze())).cpu().item()
-                    total_train_mape_loss += torch.mean(MAPE().loss(predict.squeeze().unsqueeze(-1), target.squeeze())).cpu().item()
+                    predict = scaler.inverse_transform(predict.squeeze().cpu().numpy())
+                    target = scaler.inverse_transform(target.squeeze().cpu().numpy())
 
-                train_mse_loss.backward()
+                    total_train_mse_loss += MSE(target, predict)
+                    total_train_mae_loss += MAE(target, predict)
+                    total_train_mape_loss += MAPE(target, predict)
+
+                loss.backward()
                 optimizer.step()
-
-            if (epoch+1)%scheduler_config['decay_epoch']==0:
-                scheduler.step()
 
             training_stats['avg_train_mse_loss'].append(total_train_mse_loss/len(train_dataset))
             training_stats['avg_train_mae_loss'].append(total_train_mae_loss/len(train_dataset))
@@ -131,29 +134,46 @@ def train(config_path):
 
                     features = torch.unsqueeze(features, 3).to(device, dtype=torch.float)
                     target = target.to(device, dtype=torch.float)
-
                     predict = model(features)
-                    val_mse_loss = loss_criterion(predict, target)
 
-                    total_val_mse_loss += val_mse_loss.cpu().item()
-                    total_val_mae_loss += torch.mean(MAE().loss(predict.squeeze().unsqueeze(-1), target.squeeze())).cpu().item()
-                    total_val_mape_loss += torch.mean(MAPE().loss(predict.squeeze().unsqueeze(-1), target.squeeze())).cpu().item()
+                    predict = scaler.inverse_transform(predict.squeeze().cpu().numpy())
+                    target = scaler.inverse_transform(target.squeeze().cpu().numpy())
+
+                    total_val_mse_loss += MSE(target, predict)
+                    total_val_mae_loss += MAE(target, predict)
+                    total_val_mape_loss += MAPE(target, predict)
 
             training_stats['avg_val_mse_loss'].append(total_val_mse_loss/len(val_dataset))
             training_stats['avg_val_mae_loss'].append(total_val_mae_loss/len(val_dataset))
             training_stats['avg_val_mape_loss'].append(total_val_mape_loss/len(val_dataset))
-            
+                        
+            if (epoch+1)%scheduler_config['decay_epoch']==0:
+                scheduler.step()
+
+            if len(training_stats['avg_val_mape_loss']) > 3:
+                if abs(training_stats['avg_val_mape_loss'][-1]-training_stats['avg_val_mape_loss'][-2])<early_stopping_delta:
+                    early_stopping_patience -= 1
+                    if early_stopping_patience == 0:
+                        break
+                else:
+                    early_stopping_patience = training_config['early_stopping_patience']
+
             training_stats['epoch'].append(epoch+1)
+            training_stats['early_stopping_patience'].append(early_stopping_patience)
 
             pbar.set_description(
                 f'epoch: {epoch+1}, '\
-                f'avg_train_loss: {round(total_train_mse_loss/len(train_dataset), 6)}, ' \
-                f'avg_val_loss: {round(total_val_mse_loss/len(val_dataset), 6)}, '\
-                f'lr: {scheduler.get_last_lr()[0]}'
+                f'avg_train_loss: {round(total_train_mse_loss/len(train_dataset), 3)}, ' \
+                f'avg_val_loss: {round(total_val_mse_loss/len(val_dataset), 3)}, '\
+                f'patience: {early_stopping_patience}'
                 )
             pbar.update(1)
 
             pd.DataFrame(training_stats).to_csv(f'{out_dir}/training_results.csv', index=False)
+
+            rank = sorted(training_stats['avg_val_mape_loss']).index(training_stats['avg_val_mape_loss'][-1]) + 1
+            if rank < training_config['save_n_best']:
+                torch.save(model, f'{out_dir}/model-rank{rank}.pth')
 
             wandb.log(
                 {key: val[-1] for key, val in training_stats.items()}

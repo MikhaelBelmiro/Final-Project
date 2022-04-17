@@ -15,7 +15,6 @@ def process_adj_mat(mat, eps, sigma_sq):
                 mat[i, j] = 0.0
     return mat
 
-
 def normalize_matrix(mat):
     mat = mat + np.eye(mat.shape[0])
     diag = np.diagflat(np.sum(mat, axis=1))
@@ -39,3 +38,14 @@ class TimeSpaceDataset(Dataset):
         target = self.matrix[index+self.in_timesteps:index+self.in_timesteps+1, :]
 
         return features, target
+
+def MAPE(v, v_):
+    return np.mean(np.abs((v_-v)/v))
+
+
+def MSE(v, v_):
+    return np.mean((v_-v)**2)
+
+
+def MAE(v, v_):
+    return np.mean(np.abs(v_-v))
