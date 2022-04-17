@@ -1,0 +1,6 @@
+torch --extra-index-url https://download.pytorch.org/whl/cu113
+torchvision --extra-index-url https://download.pytorch.org/whl/cu113
+torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
+h5py==3.6.0
+pandas==1.4.2
+tqdm==4.64.0
