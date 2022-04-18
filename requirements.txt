@@ -4,3 +4,6 @@ torchaudio --extra-index-url https://download.pytorch.org/whl/cu113
 h5py==3.6.0
 pandas==1.4.2
 tqdm==4.64.0
+pmdarima==1.8.5
+python-dotenv==0.20.0
+wandb

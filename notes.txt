@@ -1,1 +1,2 @@
-first-experiment: hyperparameter pake yang ada di paper
+first-experiment: hyperparameter pake yang ada di paper dan juga penggunaan randomizer untuk pembuatan adj matrix.
+second-experiment: hyperparameter pake yang ada di paper dan juga tidak menggunakan randomizer untuk pembuatan adj matrix.

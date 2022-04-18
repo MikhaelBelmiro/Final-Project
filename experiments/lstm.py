@@ -7,20 +7,18 @@ import json
 import wandb
 import torch
 import pickle
-import warnings
 
-warnings.filterwarnings('ignore')
-
+import numpy as np
 import pandas as pd
 
 from tqdm import tqdm
+from models import LSTMModel
 from dotenv import load_dotenv
 from torch.utils.data import DataLoader
 from sklearn.preprocessing import StandardScaler
-from stgcn.model import STGCN
-from stgcn.utils import normalize_matrix, process_adj_mat, TimeSpaceDataset, MSE, MAE, MAPE
+from stgcn.utils import TimeSpaceDataset, MAPE, MSE, MAE
 
-def train(config_path):
+def run_lstm(config_path):
     with open(config_path, 'r') as config_json:
         config = json.load(config_json)
 
@@ -30,7 +28,7 @@ def train(config_path):
     optimizer_config = config['optimizer_config']
     scheduler_config = config['scheduler_config']
 
-    with open(data_config['time_space_matrix_path'], 'rb') as file:
+    with open('./data/web-traffic-time-series-forecasting/time_space_matrix.pickle', 'rb') as file:
         time_space_matrix = pickle.load(file)
 
     train_time_space_matrix = time_space_matrix[:-data_config['val_timesteps_split'], :]
@@ -41,16 +39,15 @@ def train(config_path):
     val_time_space_matrix = scaler.fit_transform(val_time_space_matrix)
 
     device = torch.device('cuda:0') if torch.cuda.is_available() else 'cpu'
-
-    with open(data_config['adj_matrix_path'], 'rb') as pickle_file:
-        adj_mat = pickle.load(pickle_file)
-
-    A_hat = process_adj_mat(adj_mat, eps=data_config['preprocess_eps'], sigma_sq=data_config['preprocess_sigma_sq'])
-    A_hat = torch.from_numpy(normalize_matrix(A_hat)).to(device, dtype=torch.float)
-
-    model = STGCN(A_hat, 1, model_config['in_timesteps'], model_config['out_timesteps']).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), **optimizer_config)
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, scheduler_config['gamma'])
+    model = LSTMModel(
+        model_config['output_targets'], 
+        model_config['input_features'], 
+        model_config['hidden_size'], 
+        model_config['num_layers'],
+        model_config['in_timesteps']
+        ).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), optimizer_config['lr'])
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, 0.7)
     loss_criterion = torch.nn.MSELoss()
 
     train_dataset = TimeSpaceDataset(
@@ -89,7 +86,7 @@ def train(config_path):
         'avg_val_mse_loss': [],
         'avg_val_mae_loss': [],
         'avg_val_mape_loss': [],
-        'epoch_time': []
+        'epoch_time': [],
     }
     with tqdm(total=training_config['num_epochs']) as pbar:
         early_stopping_patience = training_config['early_stopping_patience']
@@ -104,9 +101,8 @@ def train(config_path):
             for batch in train_dataloader:
                 optimizer.zero_grad()
                 features, target = batch
-
-                features = torch.unsqueeze(features, 3).to(device, dtype=torch.float)
-                target = target.to(device, dtype=torch.float)
+                features = features.to(device, dtype=torch.float)
+                target = target.to(device, dtype=torch.float).squeeze()
                 
                 predict = model(features)
                 loss = loss_criterion(predict, target)
@@ -134,8 +130,8 @@ def train(config_path):
                 with torch.no_grad():
                     features, target = batch
 
-                    features = torch.unsqueeze(features, 3).to(device, dtype=torch.float)
-                    target = target.to(device, dtype=torch.float)
+                    features = features.to(device, dtype=torch.float)
+                    target = target.to(device, dtype=torch.float).squeeze()
                     predict = model(features)
 
                     predict = scaler.inverse_transform(predict.squeeze().cpu().numpy())
@@ -163,7 +159,7 @@ def train(config_path):
                         early_stopping_patience -= 1
                     else:
                         early_stopping_patience = training_config['early_stopping_patience']
-            
+                        
             if early_stopping_patience == 0:
                 break
 
@@ -184,11 +180,11 @@ def train(config_path):
             wandb.log(
                 {key: val[-1] for key, val in training_stats.items()}
             )
-    
+
 if __name__ == '__main__':
     load_dotenv()
     WANDB_PROJECT_KEY = os.getenv('WANDB_PROJECT_KEY', '')
     wandb.login(key=WANDB_PROJECT_KEY)
-    wandb.init(project="tugas-akhir", entity="mikhaelbelmiro", name='STGCN')
+    wandb.init(project="tugas-akhir", entity="mikhaelbelmiro", name='LSTM')
     config_path = sys.argv[1]
-    train(config_path)
+    run_lstm(config_path)

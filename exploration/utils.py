@@ -2,10 +2,13 @@ import os
 import re
 import csv
 import time
+import torch
 import pickle
 import requests
 import numpy as np
 import pandas as pd
+
+from torch import nn
 
 def s2f(arr, dtype):
     new_array = np.zeros_like(arr, dtype=dtype)
@@ -186,7 +189,7 @@ class Graph:
         else:
             return distance_from_start
 
-def create_adj_from_mapping(mapper, adj_mat_dict):
+def create_adj_from_mapping(mapper, adj_mat_dict, randomizer=True):
     n = len(mapper)
     inverse_mapper = {val[1]:key for key, val in mapper.items()}
 
@@ -199,7 +202,10 @@ def create_adj_from_mapping(mapper, adj_mat_dict):
         col_entries = np.zeros(shape=n)
 
         for col_id, entry in col_dict.items():
-            rand = np.random.uniform(0, 0.4)
+            if randomizer:
+                rand = np.random.uniform(0, 0.4)
+            else:
+                rand = 0
 
             col_title = inverse_mapper[col_id]
             col_index, _ = mapper[col_title]
