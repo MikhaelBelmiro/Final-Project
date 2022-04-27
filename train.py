@@ -55,6 +55,8 @@ def train(config_path):
     edge_attribute = torch.from_numpy(coo_mat.data).type(torch.float32).to(device)
 
     model = STGCN(
+        model_config['in_timesteps'],
+        model_config['out_timesteps'],
         train_time_space_matrix.shape[1],
         model_config['in_channels'],
         model_config['hidden_channels'],
@@ -122,7 +124,6 @@ def train(config_path):
                 features = torch.unsqueeze(features, 3).to(device, dtype=torch.float)
                 target = target.to(device, dtype=torch.float)
                 
-                print(features.shape)
                 predict = model(features, edge_indices, edge_attribute)
                 loss = loss_criterion(predict, target)
 
