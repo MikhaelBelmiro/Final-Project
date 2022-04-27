@@ -23,8 +23,6 @@ from stgcn.model import STGCN
 from stgcn.utils import TimeSpaceDataset, MSE, MAE, MAPE
 
 def train(config_path):
-    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:64'
-
     with open(config_path, 'r') as config_json:
         config = json.load(config_json)
 
@@ -123,10 +121,10 @@ def train(config_path):
                 features, target = batch
                 features = torch.unsqueeze(features, 3).to(device, dtype=torch.float)
                 target = target.to(device, dtype=torch.float)
-                
                 predict = model(features, edge_indices, edge_attribute)
                 loss = loss_criterion(predict, target)
 
+                print("SUDAH MASUK")
                 with torch.no_grad():
                     predict = scaler.inverse_transform(predict.squeeze().cpu().numpy())
                     target = scaler.inverse_transform(target.squeeze().cpu().numpy())
