@@ -1,0 +1,3 @@
+python train.py configs/stgcn.json
+python experiments/lstm.py configs/lstm.json
+python experiments/clftp.py configs/clftp.json
