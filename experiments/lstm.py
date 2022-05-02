@@ -99,7 +99,7 @@ def run_lstm(config_path):
                     optimizer.zero_grad()
                     features, target = batch
                     features = features.to(device, dtype=torch.float)
-                    target = target.to(device, dtype=torch.float).squeeze()
+                    target = target.to(device, dtype=torch.float)
                     
                     predict = model(features)
                     loss = loss_criterion(predict, target)
@@ -113,9 +113,6 @@ def run_lstm(config_path):
             epoch_stats = update_metrics_epoch(epoch_stats, batch_stats, 'train')
 
             model.eval()
-            total_val_mse_loss = 0
-            total_val_mae_loss = 0
-            total_val_mape_loss = 0
             with tqdm(total=len(val_dataloader), leave=False) as pbar2:
                 for batch in val_dataloader:
                     with torch.no_grad():
