@@ -12,7 +12,6 @@ from stgcn.utils import MAPE, MSE, MAE
 from sklearn.preprocessing import StandardScaler
 
 def run_sarima():
-
     with open('./data/web-traffic-time-series-forecasting/time_space_matrix.pickle', 'rb') as file:
         time_space_matrix = pickle.load(file)
 

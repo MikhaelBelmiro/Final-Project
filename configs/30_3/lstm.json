@@ -1,0 +1,33 @@
+{
+    "data_config": {
+        "time_space_matrix_path": "./data/web-traffic-time-series-forecasting/time_space_matrix.pickle",
+        "adj_matrix_path": "./data/web-traffic-time-series-forecasting/adj_mat.pickle",
+        "preprocess_eps": 1e-3,
+        "preprocess_sigma_sq": 2,
+        "val_timesteps_split": 60
+    },
+
+    "training_config": {
+        "batch_size": 256,
+        "num_workers": 8,
+        "num_epochs": 1000,
+        "out_dir": "./model/30_3/lstm",
+        "save_n_best": 3,
+        "early_stopping_patience": 5,
+        "early_stopping_delta": 1e-4
+    },
+
+    "model_config": {
+        "in_timesteps": 30,
+        "out_timesteps": 3,
+        "hidden_size": 50,
+        "num_layers": 3
+    },
+    "optimizer_config": {
+        "lr": 1e-3
+    },
+    "scheduler_config": {
+        "decay_epoch": 3,
+        "gamma": 0.7
+    }
+}

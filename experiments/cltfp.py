@@ -14,13 +14,13 @@ warnings.filterwarnings('ignore')
 import pandas as pd
 
 from tqdm import tqdm
-from models import LSTMModel
+from models import CLTFPModel
 from dotenv import load_dotenv
 from torch.utils.data import DataLoader
 from sklearn.preprocessing import StandardScaler
 from stgcn.utils import TimeSpaceDataset, create_metrics_dict, update_metrics_batch, update_metrics_epoch, scheduler_step
 
-def run_lstm(config_path):
+def run_clftp(config_path):
     with open(config_path, 'r') as config_json:
         config = json.load(config_json)
 
@@ -41,13 +41,16 @@ def run_lstm(config_path):
     val_time_space_matrix = scaler.fit_transform(val_time_space_matrix)
 
     device = torch.device('cuda:0') if torch.cuda.is_available() else 'cpu'
-    model = LSTMModel(
+    model = CLTFPModel(
         model_config['in_timesteps'],
         model_config['out_timesteps'],
+        model_config['out_cnn_channels'],
+        model_config['first_cnn_kernel'],
+        model_config['second_cnn_kernel'],
+        model_config['third_cnn_kernel'],
         time_space_matrix.shape[1],
-        model_config['hidden_size'],
-        model_config['num_layers']
-        ).to(device)
+        model_config['lstm_hidden_channels']
+    ).to(device)
     optimizer = torch.optim.Adam(model.parameters(), optimizer_config['lr'])
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, 0.7)
     loss_criterion = torch.nn.MSELoss()
@@ -98,12 +101,13 @@ def run_lstm(config_path):
                 for batch in train_dataloader:
                     optimizer.zero_grad()
                     features, target = batch
+
                     features = features.to(device, dtype=torch.float)
-                    target = target.to(device, dtype=torch.float).squeeze()
+                    target = target.to(device, dtype=torch.float)
                     
                     predict = model(features)
                     loss = loss_criterion(predict, target)
-
+ 
                     with torch.no_grad():
                         batch_stats = update_metrics_batch(batch_stats, predict, target, 'train', scaler)
 
@@ -113,9 +117,6 @@ def run_lstm(config_path):
             epoch_stats = update_metrics_epoch(epoch_stats, batch_stats, 'train')
 
             model.eval()
-            total_val_mse_loss = 0
-            total_val_mae_loss = 0
-            total_val_mape_loss = 0
             with tqdm(total=len(val_dataloader), leave=False) as pbar2:
                 for batch in val_dataloader:
                     with torch.no_grad():
@@ -174,6 +175,6 @@ if __name__ == '__main__':
     load_dotenv()
     WANDB_PROJECT_KEY = os.getenv('WANDB_PROJECT_KEY', '')
     wandb.login(key=WANDB_PROJECT_KEY)
-    wandb.init(project="tugas-akhir", entity="mikhaelbelmiro", name='LSTM')
+    wandb.init(project="tugas-akhir", entity="mikhaelbelmiro", name='CLFTP')
     config_path = sys.argv[1]
-    run_lstm(config_path)
+    run_clftp(config_path)
