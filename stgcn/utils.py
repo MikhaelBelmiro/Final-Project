@@ -108,10 +108,11 @@ def update_metrics_epoch(epoch_stats, batch_stats, mode):
 def calculate_weighted_monitor_stat(epoch_stats, monitor_stat):
     current_loss = 0
     prev_loss = 0
+    total_weight = 0
     for weight, col in monitor_stat:
         current_loss += weight*epoch_stats[col][-1]
         prev_loss += weight*epoch_stats[col][-2]
-        total_weight = weight
+        total_weight += weight
     current_loss = current_loss/total_weight
     prev_loss = prev_loss/total_weight
     return current_loss, prev_loss

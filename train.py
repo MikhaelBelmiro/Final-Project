@@ -179,7 +179,8 @@ def train(config_path):
 if __name__ == '__main__':
     load_dotenv()
     WANDB_PROJECT_KEY = os.getenv('WANDB_PROJECT_KEY', '')
-    wandb.login(key=WANDB_PROJECT_KEY)
-    wandb.init(project="tugas-akhir", entity="mikhaelbelmiro", name='STGCN')
     config_path = sys.argv[1]
+    version = config_path.split('/')[-2]
+    wandb.login(key=WANDB_PROJECT_KEY)
+    wandb.init(project="tugas-akhir", entity="mikhaelbelmiro", name=f'STGCN_{version}')
     train(config_path)

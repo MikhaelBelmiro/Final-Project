@@ -58,9 +58,6 @@ class CLTFPModel(nn.Module):
 
         out_lstm, (_, _) = self.lstm(x)
 
-        print(out_cnn.shape)
-        print(out_lstm.shape)
-
         out = torch.cat((out_cnn, out_lstm), 2)
         out = self.first_linear(out).permute(0, 2, 1)
         out = self.second_linear(out)

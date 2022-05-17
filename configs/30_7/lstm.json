@@ -14,7 +14,7 @@
         "out_dir": "./model/30_7/lstm",
         "save_n_best": 3,
         "early_stopping_patience": 5,
-        "early_stopping_delta": 1e-4
+        "early_stopping_delta": 1e-2
     },
 
     "model_config": {
